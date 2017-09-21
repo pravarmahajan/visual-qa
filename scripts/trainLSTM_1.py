@@ -5,7 +5,9 @@ import argparse
 
 from keras.models import Sequential, model_from_json
 from keras.layers import Dense, Activation, Dropout, Reshape, Merge
-from keras.layers import LSTM
+from keras.layers import LSTM, Bidirectional, RepeatVector
+from keras.layers.embeddings import Embedding
+from keras.layers.wrappers import TimeDistributed
 from keras.utils import np_utils, generic_utils
 from keras.callbacks import ModelCheckpoint, RemoteMonitor
 
@@ -15,8 +17,7 @@ from sklearn import preprocessing
 from spacy.en import English
 
 from utils import grouper, selectFrequentAnswers
-from features import get_images_matrix, get_answers_matrix, get_questions_tensor_timeseries
-
+from features import get_images_matrix, get_answers_matrix, get_embeddings, get_categorical
 
 def main():
     parser = argparse.ArgumentParser()
@@ -37,8 +38,9 @@ def main():
     img_dim = 4096
     img_out_dim = 1024
     max_len = 25
-    nb_classes = 1000
-
+    nb_classes = 10000
+    num_out_words = 3
+    max_answers = nb_classes
     # get the data
     questions_train = open('../data/preprocessed/questions_train2014.txt',
                            'r').read().decode('utf-8').splitlines()
@@ -52,13 +54,12 @@ def main():
 
     nlp = English()
 
-    max_answers = nb_classes
-    questions_train, answers_train, images_train = selectFrequentAnswers(
-        questions_train, answers_train, images_train, max_answers)
+    #questions_train, answers_train, images_train = selectFrequentAnswers(
+    #    questions_train, answers_train, images_train, max_answers)
     questions_lengths_train, questions_train, answers_train, images_train = (list(t) for t in zip(
         *sorted(zip(questions_lengths_train, questions_train, answers_train, images_train))))
 
-    #word_to_id, embedding_matrix = get_embeddings('../data/glove.6B.300d.txt', word_vec_dim)
+    word_to_id, embedding_matrix = get_embeddings('../data/glove.6B.300d.txt', word_vec_dim)
     print 'loaded word2vec features...'
 
     # encode the remaining answers
@@ -73,28 +74,31 @@ def main():
     image_model.add(Dropout(args.dropout))
 
     language_model = Sequential()
+    language_model.add(Embedding(embedding_matrix.shape[0], embedding_matrix.shape[1],
+                                 trainable=False,
+                                 weights=[embedding_matrix],
+                                 input_length=max_len))
+
     if args.num_hidden_layers_lstm == 1:
-        language_model.add(LSTM(args.num_hidden_units_lstm,
+        language_model.add(Bidirectional(LSTM(args.num_hidden_units_lstm,
                                 return_sequences=False,
-                                input_shape=(max_len, word_vec_dim),
-                                unroll=True))
+                                unroll=True)))
         language_model.add(Dropout(args.dropout))
     else:
-        language_model.add(LSTM(args.num_hidden_units_lstm,
-                                return_sequences=True,
-                                input_shape=(max_len, word_vec_dim),
-                                unroll=True))
+        language_model.add(Bidirectional(LSTM(args.num_hidden_units_lstm,
+                                            return_sequences=True,
+                                            unroll=True)))
         language_model.add(Dropout(args.dropout))
 
         for i in xrange(args.num_hidden_layers_lstm - 2):
-            language_model.add(LSTM(args.num_hidden_units_lstm,
-                                    return_sequences=True, unroll=True))
+            language_model.add(Bidirectional(LSTM(args.num_hidden_units_lstm,
+                                    return_sequences=True, unroll=True)))
             language_model.add(Dropout(args.dropout))
-        language_model.add(LSTM(args.num_hidden_units_lstm,
-                                return_sequences=False, unroll=True))
-        language_model.add(Dropout(args.dropout))
+            language_model.add(Dropout(args.dropout))
 
-    language_model.add(Dense(img_out_dim, activation=args.activation_mlp))
+        language_model.add(Bidirectional(LSTM(args.num_hidden_units_lstm,
+                                return_sequences=False, unroll=True)))
+        language_model.add(Dropout(args.dropout))
 
     model = Sequential()
     model.add(Merge([language_model, image_model], mode='mul',
@@ -104,8 +108,12 @@ def main():
                         kernel_initializer='uniform'))
         model.add(Activation(args.activation_mlp))
         model.add(Dropout(args.dropout))
-    model.add(Dense(nb_classes))
-    model.add(Activation('softmax'))
+
+    model.add(RepeatVector(num_out_words))
+    model.add(LSTM(args.num_hidden_units_lstm, return_sequences=True,
+                   return_states=True))
+    model.add(TimeDistributed(Dense(nb_classes)))
+    model.add(Dense(nb_classes, activation='softmax'))
 
     json_string = model.to_json()
     model_file_name = '../models/lstm_1_num_hidden_units_lstm_' + str(args.num_hidden_units_lstm) + \
@@ -133,12 +141,13 @@ def main():
         progbar = generic_utils.Progbar(len(questions_train))
 
         for qu_batch, an_batch, im_batch in zip(grouper(questions_train, args.batch_size, fillvalue=questions_train[-1]),
-                                                grouper(
-                                                    answers_train, args.batch_size, fillvalue=answers_train[-1]),
+                                                grouper(answers_train, args.batch_size, fillvalue=answers_train[-1]),
                                                 grouper(images_train, args.batch_size, fillvalue=images_train[-1])):
-            X_q_batch = get_questions_tensor_timeseries(qu_batch, nlp, max_len)
+            #X_q_batch = get_questions_tensor_timeseries(qu_batch, nlp, max_len)
+            X_q_batch = get_categorical(qu_batch, word_to_id, num_out_words)
             X_i_batch = get_images_matrix(im_batch, img_map, VGGfeatures)
-            Y_batch = get_answers_matrix(an_batch, labelencoder)
+            Y_batch = get_answers_matrix(an_batch, labelencoder,
+                                         num_hidden_layers_lstm)
             loss = model.train_on_batch([X_q_batch, X_i_batch], Y_batch)
             progbar.add(args.batch_size, values=[("train loss", loss)])
 

@@ -5,6 +5,7 @@ from keras.models import model_from_json
 import numpy as np
 import scipy.io
 from sklearn.externals import joblib
+from spacy.en import English
 
 from features import get_questions_tensor_timeseries, get_images_matrix, get_answers_matrix
 from utils import grouper
@@ -17,6 +18,8 @@ def main():
     parser.add_argument('-weights', type=str, required=True)
     parser.add_argument('-results', type=str, required=True)
     args = parser.parse_args()
+
+    nlp = English()
 
     model = model_from_json(open(args.model).read())
     model.load_weights(args.weights)
