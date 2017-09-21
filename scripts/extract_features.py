@@ -21,6 +21,7 @@ if args.caffe:
 
 import caffe
 
+
 def predict(in_data, net):
 
     out = net.forward(**{net.inputs[0]: in_data})
@@ -38,24 +39,24 @@ def batch_predict(filenames, net):
     for i in range(0, Nf, N):
         in_data = np.zeros((N, C, H, W), dtype=np.float32)
 
-        batch_range = range(i, min(i+N, Nf))
+        batch_range = range(i, min(i + N, Nf))
         batch_filenames = [filenames[j] for j in batch_range]
         Nb = len(batch_range)
 
         batch_images = np.zeros((Nb, 3, H, W))
-        for j,fname in enumerate(batch_filenames):
+        for j, fname in enumerate(batch_filenames):
             im = imread(fname)
             if len(im.shape) == 2:
-                im = np.tile(im[:,:,np.newaxis], (1,1,3))
+                im = np.tile(im[:, :, np.newaxis], (1, 1, 3))
             # RGB -> BGR
-            im = im[:,:,(2,1,0)]
+            im = im[:, :, (2, 1, 0)]
             # mean subtraction
             im = im - np.array([103.939, 116.779, 123.68])
             # resize
             im = imresize(im, (H, W), 'bicubic')
             # get channel in correct dimension
             im = np.transpose(im, (2, 0, 1))
-            batch_images[j,:,:,:] = im
+            batch_images[j, :, :, :] = im
 
         # insert into correct place
         in_data[0:len(batch_range), :, :, :] = batch_images
@@ -64,9 +65,9 @@ def batch_predict(filenames, net):
         ftrs = predict(in_data, net)
 
         for j in range(len(batch_range)):
-            allftrs[i+j,:] = ftrs[j,:]
+            allftrs[i + j, :] = ftrs[j, :]
 
-        print 'Done %d/%d files' % (i+len(batch_range), len(filenames))
+        print 'Done %d/%d files' % (i + len(batch_range), len(filenames))
 
     return allftrs
 
@@ -82,4 +83,5 @@ base_dir = os.path.dirname(args.image)
 
 allftrs = batch_predict([args.image], net)
 
-scipy.io.savemat(os.path.join(base_dir, 'vgg_feats.mat'), mdict =  {'feats': np.transpose(allftrs)})
+scipy.io.savemat(os.path.join(base_dir, 'vgg_feats.mat'),
+                 mdict={'feats': np.transpose(allftrs)})

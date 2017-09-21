@@ -1,14 +1,12 @@
 #!/bin/sh
 #make other scripts executable
-chmod +x ../data/download.sh
-chmod +x ../features/download.sh
+#chmod +x ../data/download.sh
+#chmod +x ../features/download.sh
 #download data and features
-cd ../data/
-./download.sh
-cd ../3rdParty/
-./download.sh
-cd ../features/
-./download.sh
+#cd ../data/
+#./download.sh
+#cd ../features/
+#./download.sh
 
 #convert the data to a simpler format
 cd ../scripts
