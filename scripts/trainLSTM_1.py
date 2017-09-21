@@ -5,7 +5,7 @@ import argparse
 
 from keras.models import Sequential, model_from_json
 from keras.layers import Dense, Activation, Dropout, Reshape, Merge
-from keras.layers import LSTM, Bidirectional, RepeatVector
+from keras.layers import LSTM, Bidirectional
 from keras.layers.embeddings import Embedding
 from keras.layers.wrappers import TimeDistributed
 from keras.utils import np_utils, generic_utils
