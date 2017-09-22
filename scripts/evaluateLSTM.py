@@ -5,9 +5,8 @@ from keras.models import model_from_json
 import numpy as np
 import scipy.io
 from sklearn.externals import joblib
-from spacy.en import English
 
-from features import get_questions_tensor_timeseries, get_images_matrix, get_answers_matrix
+from features import get_questions_tensor_timeseries, get_images_matrix, get_answers_matrix, get_embeddings, get_categorical
 from utils import grouper
 
 
@@ -18,8 +17,6 @@ def main():
     parser.add_argument('-weights', type=str, required=True)
     parser.add_argument('-results', type=str, required=True)
     args = parser.parse_args()
-
-    nlp = English()
 
     model = model_from_json(open(args.model).read())
     model.load_weights(args.weights)
@@ -50,12 +47,14 @@ def main():
         id_split = ids.split()
         img_map[id_split[0]] = int(id_split[1])
 
+    word_vec_dim=300
+    word_to_id, embedding_matrix = get_embeddings('../data/glove.6B.300d.txt', word_vec_dim)
     print 'Loaded word2vec features'
 
     nb_classes = 1000
     y_predict_text = []
     batchSize = 128
-    max_len = 25
+    max_len = 15
     word_vec_dim = 300
     widgets = ['Evaluating ', Percentage(), ' ', Bar(marker='#', left='[', right=']'),
                ' ', ETA()]
@@ -65,7 +64,7 @@ def main():
                                                  grouper(
                                                      answers_val, batchSize, fillvalue=answers_val[0]),
                                                  grouper(images_val, batchSize, fillvalue=images_val[0]))):
-        X_q_batch = get_questions_tensor_timeseries(qu_batch, nlp, max_len)
+        X_q_batch = get_categorical(qu_batch, word_to_id, max_len)
         if 'language_only' in args.model:
             X_batch = X_q_batch
         else:

@@ -5,7 +5,7 @@ import argparse
 
 from keras.models import Sequential, model_from_json
 from keras.layers import Dense, Activation, Dropout, Reshape, Merge
-from keras.layers import LSTM, Bidirectional
+from keras.layers import LSTM, Bidirectional, Conv1D
 from keras.layers.embeddings import Embedding
 from keras.layers.wrappers import TimeDistributed
 from keras.utils import np_utils, generic_utils
@@ -13,8 +13,6 @@ from keras.callbacks import ModelCheckpoint, RemoteMonitor
 
 from sklearn.externals import joblib
 from sklearn import preprocessing
-
-from spacy.en import English
 
 from utils import grouper, selectFrequentAnswers
 from features import get_images_matrix, get_answers_matrix, get_embeddings, get_categorical
@@ -37,17 +35,17 @@ def main():
     word_vec_dim = 300
     img_dim = 4096
     img_out_dim = 1024
-    max_len = 25
+    max_len = 15
     nb_classes = 1000
     max_answers = nb_classes
     # get the data
-    questions_train = open('../data/preprocessed/questions_train2014.txt',
+    questions_train = open('../data/preprocessed/questions_sample2014.txt',
                            'r').read().decode('utf-8').splitlines()
     questions_lengths_train = open(
-        '../data/preprocessed/questions_lengths_train2014.txt', 'r').read().decode('utf8').splitlines()
-    answers_train = open('../data/preprocessed/answers_train2014_modal.txt',
+        '../data/preprocessed/questions_lengths_sample2014.txt', 'r').read().decode('utf8').splitlines()
+    answers_train = open('../data/preprocessed/answers_sample2014_modal.txt',
                          'r').read().decode('utf8').splitlines()
-    images_train = open('../data/preprocessed/images_train2014.txt',
+    images_train = open('../data/preprocessed/images_sample2014.txt',
                         'r').read().decode('utf8').splitlines()
     vgg_model_path = '../features/coco/vgg_feats.mat'
 
@@ -75,6 +73,7 @@ def main():
                                  weights=[embedding_matrix],
                                  input_length=max_len))
 
+    language_model.add(Conv1D(15, 3, strides=1, padding="same"))
     if args.num_hidden_layers_lstm == 1:
         language_model.add(Bidirectional(LSTM(args.num_hidden_units_lstm,
                                 return_sequences=False,
