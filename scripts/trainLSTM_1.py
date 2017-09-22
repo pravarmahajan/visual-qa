@@ -38,8 +38,7 @@ def main():
     img_dim = 4096
     img_out_dim = 1024
     max_len = 25
-    nb_classes = 10000
-    num_out_words = 3
+    nb_classes = 1000
     max_answers = nb_classes
     # get the data
     questions_train = open('../data/preprocessed/questions_train2014.txt',
@@ -52,10 +51,8 @@ def main():
                         'r').read().decode('utf8').splitlines()
     vgg_model_path = '../features/coco/vgg_feats.mat'
 
-    nlp = English()
-
-    #questions_train, answers_train, images_train = selectFrequentAnswers(
-    #    questions_train, answers_train, images_train, max_answers)
+    questions_train, answers_train, images_train = selectFrequentAnswers(
+        questions_train, answers_train, images_train, max_answers)
     questions_lengths_train, questions_train, answers_train, images_train = (list(t) for t in zip(
         *sorted(zip(questions_lengths_train, questions_train, answers_train, images_train))))
 
@@ -65,7 +62,6 @@ def main():
     # encode the remaining answers
     labelencoder = preprocessing.LabelEncoder()
     labelencoder.fit(answers_train)
-    nb_classes = len(list(labelencoder.classes_))
     joblib.dump(labelencoder, '../models/labelencoder.pkl')
 
     image_model = Sequential()
@@ -109,10 +105,6 @@ def main():
         model.add(Activation(args.activation_mlp))
         model.add(Dropout(args.dropout))
 
-    model.add(RepeatVector(num_out_words))
-    model.add(LSTM(args.num_hidden_units_lstm, return_sequences=True,
-                   return_states=True))
-    model.add(TimeDistributed(Dense(nb_classes)))
     model.add(Dense(nb_classes, activation='softmax'))
 
     json_string = model.to_json()
@@ -144,10 +136,10 @@ def main():
                                                 grouper(answers_train, args.batch_size, fillvalue=answers_train[-1]),
                                                 grouper(images_train, args.batch_size, fillvalue=images_train[-1])):
             #X_q_batch = get_questions_tensor_timeseries(qu_batch, nlp, max_len)
-            X_q_batch = get_categorical(qu_batch, word_to_id, num_out_words)
+            X_q_batch = get_categorical(qu_batch, word_to_id, max_len)
             X_i_batch = get_images_matrix(im_batch, img_map, VGGfeatures)
-            Y_batch = get_answers_matrix(an_batch, labelencoder,
-                                         num_hidden_layers_lstm)
+            Y_batch = get_answers_matrix(an_batch, labelencoder)
+                                         
             loss = model.train_on_batch([X_q_batch, X_i_batch], Y_batch)
             progbar.add(args.batch_size, values=[("train loss", loss)])
 
